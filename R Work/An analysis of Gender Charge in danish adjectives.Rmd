@@ -1,0 +1,223 @@
+---
+title: "An analysis of Gender Charge in danish Adjectives"
+author: "Lasse Hansen"
+date: "5/16/2020"
+output: html_document
+---
+
+### Results 1
+
+We asked 157 participants to rate 72 Danish adjectives on a scale from -5 to +5. A rating of -5 was characterized as having a very feminine charge and representing the most female-charged a word could get. A rating of +5 was characterized as having a very masculine charge and representing the most male-charged a word could get. A rating of 0 was characterized as being of neutral charge. The participants rated the adjectives online through a Google Surveys questionnaire. We chose the 72 different adjectives presented in the questionnaire ourselves, using a list of the most frequently used adjectives of the Danish language (Basby, 2017) as a starting point. From that list we picked 24 adjectives that we expected would be associated with feminine features, and 24 adjectives that we expected would be associated with masculine features. Lastly, we picked 24 adjectives that we expected to be gender neutral.
+
+First i will start be loading the packages necessary:
+
+```{r}
+pacman::p_load(tidyverse, pastecs, dequer, formattable, tidyr, dplyr, data.table, lme4, boot, lmerTest, caret, e1071)
+```
+
+#### Loading and cleaning data
+
+The data is then loaded into a dataframe. In the dataframe is the mean and the standard error of the mean for all of the participants ratings of  each of the adjectives:
+
+```{r}
+GC <- read.csv("Words_GC.csv", sep = ";")
+
+GC$Average.Charge <- str_replace_all(GC$Average.Charge, "[,]", ".") 
+GC$Standard.Deviation <- str_replace_all(GC$Standard.Deviation, "[,]", ".")
+```
+
+
+The data is afterwards made numeric and arranged in a descending order according to their individual mean gender charge:
+
+```{r}
+GC$Average.Charge <- as.numeric(GC$Average.Charge) #Making charge numeric
+GC$Standard.Deviation <- as.numeric(GC$Standard.Deviation)
+
+GC <- as_tibble(GC) #Loading it as tibble as i need to change the order 
+GC <- GC %>% arrange(Average.Charge) %>% mutate(Word = factor(Word, levels=Word)) #Arranging the words with descending charge values, and afterwards i am mutating the factor so it will follow accordingly
+```
+
+A plot of the GC for each adjective is made:
+
+```{r}
+ggplot(GC, aes(Word, Average.Charge, fill = Average.Charge, color = Average.Charge)) + 
+        geom_col(stat = 'summary', fun.y = mean, width = 0.5) + 
+        coord_flip() + 
+        ylim(-3,3) + 
+        scale_colour_gradient2(GC, 
+          low = "Red", 
+          high = "Blue", 
+          mid = "cornflowerblue", 
+          midpoint = 1, 
+          guide = guide_colorbar(), 
+          breaks = c(-3,0,3), 
+          labels=c("Very Female",'Neutral',"Very Male"), 
+          limits=c(-3,3)) +             
+        scale_fill_gradient2(GC, 
+          low = "Red", 
+          high = "Blue", 
+          mid = "cornflowerblue", 
+          position = 'left', 
+          midpoint = 1, 
+          guide = guide_colorbar(), 
+          breaks = c(-3,0,3), 
+          labels=c("Very Female",'Neutral',"Very Male"),
+          limits = c(-3,3)) + 
+        xlab('Danish Adjective') + 
+        ylab('Mean Gender-Charge') + 
+        theme(legend.title = element_blank())
+```
+
+#### Relationship between the overall rating of a word and individual participants ratings of a word
+
+Furthermore, we used linear mixed-effects models to get an insight into the relationship between the overall rating of a word and the individual participant’s rating of a word. Therefore, we included random intercepts for subjects to rule out statistical noise, taking into account people’s potentially different prejudices. This was done in Rstudio, version 1.2.1335 (R Core Team 2019):
+
+```{r}
+Rating_GC <- read.csv("Rating_Charge.csv", sep = ";")
+Rating_GC$ID <- as.factor(Rating_GC$ID)
+Rating_GC$Charge <- str_replace_all(Rating_GC$Charge, "[,]", ".") 
+Rating_GC$Charge <- as.numeric(Rating_GC$Charge)
+
+summary(lmer(Rating ~ Charge + (1|ID), data = Rating_GC, REML = F))
+```
+
+The effect of the participants’ ratings for each word as a predictor of the words GC was significant (GC ~ Participants Rating + (1|Subject): β = .99, SE = 0.01, t = 85.23, p <.001). In general, each subject had very low variability in their ratings of words (SD = 0.13), again amplifying this agreement of ratings.
+
+When investigating the relationship between the individual participant’s ratings and the GC determined, we found that if people’s ratings of a word decreased so would the average GC of a word and vice versa. This means that there was a tendency for people to agree on the ratings of the different words. Thus, creating a stronger ground for claiming that people agree on these ratings and that the adjectives in themselves do indeed contain an implicit gender-bias. This was done by running a linear mixed effects model which, to rule out statistical noise- Such biases are visualized in the plot below:
+
+```{r}
+ggplot(Rating_GC, aes(Charge, Rating, colour = ID)) + 
+    geom_point() + geom_smooth(method = "lm", se = F) + 
+    theme(legend.position = 'none') + 
+    xlab("Average GC of each word") + 
+    ylab("Each participants") + 
+    scale_fill_brewer(palette="Set5")
+```
+
+Each line/colour represents the random  intercepts for participants.
+
+#### Likelihood ratio test
+
+We used the lmerTest package from the program version 3.1-1 (Kuznetsova, Brockhoff, & Christensen, 2019) to test if our model predicted our data significantly better than the null model, and to give us an overview of the model’s strength:
+
+```{r}
+model.null <- lmer(Rating ~ 1 + (1|ID), data = Rating_GC, REML = F)
+model <- lmer(Rating ~ Charge + (1|ID), data = Rating_GC, REML = F)
+
+anova(model.null, model)
+```
+
+
+Through a likelihood ratio test, we found that participants’ ratings affected gender charge (𝜒2(4,1) = 5570.7, p < .001). The relationship was positive which again gives us an indication that we had unanimous answers between participants.
+
+
+### Results 2
+
+
+To be able to determine the weight of the average gender charge as a predictor of the binary outcome, we looked at the results from the second questionnaire. The binary outcome was the participants’ responses to what gender they thought the gender-neutral subject was. Particularly, we looked at the binary response outcome, gender of the participant, and average sentence GC that was established from analysis 1.
+
+First i will start by loading the data and cleaning it:
+
+```{r}
+sentences <- read.csv("Sentences.csv", sep = ";")
+sentences_1 <- subset(sentences, OUTCOME == "Mand" | OUTCOME == "Kvinde")
+sentences_1$CHARGE <- str_replace_all(sentences_1$CHARGE, ",", ".") #Replacing commas with dots
+
+sentences_1$OUTCOME <- as.factor(sentences_1$OUTCOME)
+
+sentences_1$BINARYOUTCOME <- ifelse(sentences_1$OUTCOME == "Mand", "1", 
+                            ifelse(sentences_1$OUTCOME == "Kvinde", "0", sentences_1$OUTCOME)) #Coding male = 1 and female = 0 for the sake of the analysis
+sentences_1$ID <- as.factor(sentences_1$ID) #Making each ID a factor
+sentences_1$BINARYOUTCOME <- as.factor(sentences_1$BINARYOUTCOME)
+sentences_1$CHARGE <- as.numeric(sentences_1$CHARGE)
+sentences_1$Div <- (sentences_1$CHARGE/3) #Here i am making an average sentence charge for each sentences. The column div is the accumulated sentence charge
+sentences_1$Div <- as.numeric(sentences_1$Div)
+```
+
+Because we wanted to investigate if you could make a good explanation of people’s understanding of the gender-neutral subject in a sentence by relying on the mean GC found in the first analysis. We made a logistic mixed effects model that predicted a binary outcome (either male or female). These are fit with a statistical method called maximum likelihood with R’s Lapace approximation and using a combination of Nelder-Mead- and BOBYQA optimizers.
+
+### Logistic model
+
+The logistic model was used to determine the relationship between the mean ratings of the words and whether people categorized sentences as being descriptive of a man or a
+woman. Only the sentences where the participants were asked to deem the subject a man/woman were used for analysis. Choices of the gender of the persons in the sentences were recorded in the questionnaire through Google Surveys. Data analysis and statistical models were run in R version 3.6.1 (R Core Team 2019) in 1.2.1335. Our logistic mixed-effects models
+included random intercepts for our stimuli (the different sentences presented) to be able to rule out statistical noise:
+
+```{r}
+glm.mod <- glmer(BINARYOUTCOME ~ Div + (1|STIMULI), sentences_1, family = binomial)
+summary(glm.mod)
+```
+
+The effect of our average gender charge was statistically significant (Binary Outcome ~ Sentence Charge + (1|Stimuli): β = 1.64, SE = 0.16, z = 10.16, p <.001), suggesting that the gender charge of the sentence had an overall effect on which gender our participants characterized the gender-neutral subject as.
+
+We also used the package boot version 1.3-23 (Ripley 2019) to obtain the inverse logit of the log-odds from our model:
+
+```{r}
+boot::inv.logit(0.03633) #probability of being a male given GC = 0,
+```
+
+We calculated the probabilities of the gender-neutral subject of the sentence as being of either gender given the average GC of the adjectives of the sentence. This gave a 3.7% probability of being a male given GC = -2, and a 50,9% probability of being a male given GC = 0, and a 96.5% probability of being a male given GC = 2. These indications are supported in Figure 4, namely that if the average GC > 0 it is more probable that we get a binary outcome that is man.
+
+This is also visualised as follows:
+
+```{r}
+ggplot(sentences_1, aes(Div, BINARYOUTCOME, color = Div, fill = Div)) + geom_jitter(width = .4, height = .4)
+```
+
+To be able to deem our model better at predicting our results, than what would happen by chance we made a likelihood ratio test:
+
+```{r}
+glm.null <- glmer(BINARYOUTCOME ~ 1 + (1|STIMULI), sentences_1, family = binomial)
+glm.mod <- glmer(BINARYOUTCOME ~ Div + (1|STIMULI), sentences_1, family = binomial)
+
+anova(glm.null, glm.mod)
+```
+
+Through this we established that GC significantly predicts the binary outcome better than our null model: 𝜒(3,1) = 41.58, p <.001. Meaning that the gender charge found
+in analysis 1 is better than chance at predicting the answers given by our participants. Furthermore, the AIC and BIC values of our theoretically justifiable best model were lower than those of the null model. Which is an enforcement of the validity of our model. 
+
+#### Confusion matrix 
+
+Another measure taken to shed light on the validity of our created model was making a confusion matrix. This gives us an insight in how much error there was in our model, as well as it gives us insight to which types of errors were made. We trained 66.66% of our data and tested it on the remaining 33.33% of the data:
+
+
+```{r}
+#make id numeric, so we can use it to split the data
+sentences_1$ID <- as.numeric(sentences_1$ID)
+
+
+#everyone with it below 30 - train data, above 30 - test data
+Dat_train <- subset(sentences_1, ID < 100) #training data
+Dat_test <- subset(sentences_1, ID > 100) #test data
+
+#fit model to train data
+trained_model <- glmer(BINARYOUTCOME ~ Div + (1|STIMULI), sentences_1, family = binomial)
+
+#predict values in test data
+predicted_probs_test = predict(trained_model, Dat_test, type = 'response')
+
+#extract actual shape categories, i.e. 'true answers' from the original dataframe
+actual_categories_test = Dat_test$BINARYOUTCOME
+
+
+#make a dataframe to see predicted probabilities of jagged category against the actual category
+pred_df_test <- tibble(predicted_probs_test, actual_categories_test)
+
+
+#make a new column to see more easily what our model predicted: if probability is less than 0.5 - it predicted 'curved', otherwise - it predicted jagged
+pred_df_test$predicted_category = ifelse(pred_df_test$predicted_probs_test < 0.5, "0", "1")
+
+#let's see first 6 rows
+head(pred_df_test)
+
+#make sure predicted category is a factor (at the moment it's a character variable due to the way we specified ifelse outcomes)
+pred_df_test$predicted_category <- as_factor(pred_df_test$predicted_category)
+
+#make the confusion matrix
+confusionMatrix(pred_df_test$predicted_category, pred_df_test$actual_categories_test, positive ="0")
+```
+
+
+The outcome showed that our model had an accuracy of 75.46% in predicting which binary outcome corresponded with which sentence charge. The sensitivity of the model was 71.32% thereby
+showing the percentage of men being correctly classified by our model. The specificity of our model was 79.72%; the percentage of women being correctly classified by our model. In conclusion, these values of accuracy are far better than what would be obtained by chance. It therefore seems that there is a consensus about the GC of the adjectives and that this charge can successfully predict how a gender-neutral, syntactical subject is interpreted in a sentence.
+
+
