@@ -177,33 +177,32 @@ in analysis 1 is better than chance at predicting the answers given by our parti
 
 #### Confusion matrix 
 
-Another measure taken to shed light on the validity of our created model was making a confusion matrix. This gives us an insight in how much error there was in our model, as well as it gives us insight to which types of errors were made. We trained 66.66% of our data and tested it on the remaining 33.33% of the data:
+Another measure taken to shed light on the validity of our created model was making a confusion matrix. 
+This helps us describe the performance of our classification of our model We trained 66.66% of our data and tested it on the remaining 33.33% of the data.
+Looking in hindsight we would have benefitted from using cross validation to train and test our data.
 
 
 ```{r}
 #make id numeric, so we can use it to split the data
 sentences_1$ID <- as.numeric(sentences_1$ID)
 
-
 #everyone with it below 30 - train data, above 30 - test data
 Dat_train <- subset(sentences_1, ID < 100) #training data
 Dat_test <- subset(sentences_1, ID > 100) #test data
 
-#fit model to train data
+#fitting the model to the training data
 trained_model <- glmer(BINARYOUTCOME ~ Div + (1|STIMULI), sentences_1, family = binomial)
 
-#predict values in test data
+#predicting values in the testing data
 predicted_probs_test = predict(trained_model, Dat_test, type = 'response')
 
-#extract actual shape categories, i.e. 'true answers' from the original dataframe
+#extracting actual shape categories, i.e. 'true answers' from the original dataframe
 actual_categories_test = Dat_test$BINARYOUTCOME
 
-
-#make a dataframe to see predicted probabilities of jagged category against the actual category
+#making a dataframe to see predicted probabilities of jagged category against the actual category
 pred_df_test <- tibble(predicted_probs_test, actual_categories_test)
 
-
-#make a new column to see more easily what our model predicted: if probability is less than 0.5 - it predicted 'curved', otherwise - it predicted jagged
+#making a new column to see more easily what our model predicted: if probability is less than 0.5 - it predicted 'curved', otherwise - it predicted jagged
 pred_df_test$predicted_category = ifelse(pred_df_test$predicted_probs_test < 0.5, "0", "1")
 
 #let's see first 6 rows
@@ -212,12 +211,14 @@ head(pred_df_test)
 #make sure predicted category is a factor (at the moment it's a character variable due to the way we specified ifelse outcomes)
 pred_df_test$predicted_category <- as_factor(pred_df_test$predicted_category)
 
-#make the confusion matrix
+#making the confusion matrix
 confusionMatrix(pred_df_test$predicted_category, pred_df_test$actual_categories_test, positive ="0")
 ```
 
 
-The outcome showed that our model had an accuracy of 75.46% in predicting which binary outcome corresponded with which sentence charge. The sensitivity of the model was 71.32% thereby
-showing the percentage of men being correctly classified by our model. The specificity of our model was 79.72%; the percentage of women being correctly classified by our model. In conclusion, these values of accuracy are far better than what would be obtained by chance. It therefore seems that there is a consensus about the GC of the adjectives and that this charge can successfully predict how a gender-neutral, syntactical subject is interpreted in a sentence.
+The outcome showed that our model had an accuracy of 75.46% in predicting which binary outcome corresponded with which sentence charge. 
+The sensitivity of the model was 71.32% thereby showing the percentage of men being correctly classified by our model. 
+The specificity of our model was 79.72%; the percentage of women being correctly classified by our model. In conclusion, these values of accuracy are far better than what would be obtained by chance. 
+It therefore seems that there is a consensus about the GC of the adjectives and that this charge can successfully predict how a gender-neutral, syntactical subject is interpreted in a sentence.
 
 
